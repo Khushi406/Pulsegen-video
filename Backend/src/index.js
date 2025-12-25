@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 
 const uploadRouter = require('./routes/upload');
+const videosRouter = require('./routes/videos');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,7 +16,6 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-app.use('/api/upload', uploadRouter);
 
 const io = new Server(server, { cors: { origin: '*' } });
 io.on('connection', (socket) => {
@@ -24,6 +24,9 @@ io.on('connection', (socket) => {
 
 // Mount the upload router with injected `io` to avoid circular require
 app.use('/api/upload', uploadRouter(io));
+
+// Mount videos listing route
+app.use('/api/videos', videosRouter);
 
 const PORT = process.env.PORT || 4000;
 
