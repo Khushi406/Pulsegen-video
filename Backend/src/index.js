@@ -22,17 +22,22 @@ io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
 });
 
+// Mount the upload router with injected `io` to avoid circular require
+app.use('/api/upload', uploadRouter(io));
+
 const PORT = process.env.PORT || 4000;
 
 async function start() {
+  const uri = process.env.MONGO_URI || process.env.MONGO_URL || 'mongodb://127.0.0.1:27017/pulsegen';
   try {
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/pulsegen');
+    await mongoose.connect(uri);
     console.log('Connected to MongoDB');
-    server.listen(PORT, () => console.log(`Server listening on ${PORT}`));
   } catch (err) {
-    console.error('Failed to start server', err);
-    process.exit(1);
+    console.error('MongoDB connection failed:', err.message);
+    console.warn('Starting server without DB connection (degraded mode). Update MONGO_URI or MONGO_URL in .env');
   }
+
+  server.listen(PORT, () => console.log(`Server listening on ${PORT}`));
 }
 
 start();
