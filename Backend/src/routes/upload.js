@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 
 const router = express.Router();
-const ffmpeg = require('fluent-ffmpeg');
+const ffmpeg = require('../utils/ffmpegConfig');
 const Video = require('../models/video');
 const analyzeSensitivity = require('../utils/sensitivityStub');
 const { authenticate, authorize } = require('../middleware/auth');
