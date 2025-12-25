@@ -4,8 +4,10 @@ const path = require('path');
 const fs = require('fs');
 
 const router = express.Router();
+const ffmpeg = require('fluent-ffmpeg');
 const Video = require('../models/video');
 const analyzeSensitivity = require('../utils/sensitivityStub');
+const { authenticate, authorize } = require('../middleware/auth');
 
 // Export a function that accepts `io` to avoid circular dependency with `index.js`.
 module.exports = function (io) {
@@ -19,7 +21,12 @@ module.exports = function (io) {
 
   const upload = multer({ storage }).single('video');
 
-  router.post('/', async (req, res) => {
+  // Apply authentication to the entire router
+  router.use(authenticate);
+
+  // Restrict POST to Editors and Admins
+  router.post('/', authorize(['Editor', 'Admin']), async (req, res) => {
+    // Now you can access req.user.tenantId to enforce isolation
     upload(req, res, async (err) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -30,28 +37,50 @@ module.exports = function (io) {
           originalName: req.file.originalname,
           path: req.file.path,
           size: req.file.size,
-          status: 'uploaded',
+          status: 'processing',
+          owner: req.user._id,
+          tenantId: req.user.tenantId
         });
 
-        // Emit immediate upload event
-        if (io && io.emit) io.emit('video:uploaded', { id: record._id, filename: record.filename });
+        // 1. Start real processing with FFmpeg
+        ffmpeg(record.path)
+          .on('progress', (progress) => {
+            // Emit granular real-time progress (e.g., 25%, 50%)
+            if (io) io.to(req.user.tenantId).emit('video:progress', { 
+              id: record._id, 
+              percent: Math.floor(progress.percent) 
+            });
+          })
+          .on('end', async () => {
+            // 2. Automated Sensitivity Check (Trigger after processing)
+            const analysis = await analyzeSensitivity(record.path);
+            record.sensitivity = analysis.result;
+            record.status = 'processed';
+            await record.save();
 
-        // Kick off sensitivity analysis (stub)
-        const analysis = await analyzeSensitivity(record.path);
-        record.sensitivity = analysis.result || 'unknown';
-        record.status = 'processed';
-        await record.save();
+            if (io) io.to(req.user.tenantId).emit('video:processed', { 
+              id: record._id, 
+              sensitivity: record.sensitivity 
+            });
+          })
+          .on('error', (err) => {
+            console.error('FFmpeg Error:', err);
+            record.status = 'failed';
+            record.save();
+          })
+          .save(path.join(uploadDir, `processed-${record.filename}`));
 
-        // Emit processed event
-        if (io && io.emit) io.emit('video:processed', { id: record._id, sensitivity: record.sensitivity });
-
-        const fileUrl = `/uploads/${req.file.filename}`;
-        res.json({ message: 'Uploaded', file: fileUrl, id: record._id });
+        res.json({ message: 'Upload started', id: record._id });
       } catch (e) {
-        console.error('Upload processing error', e);
-        res.status(500).json({ error: 'Processing failed' });
+        res.status(500).json({ error: 'Upload failed' });
       }
     });
+  });
+
+  router.get('/', async (req, res) => {
+    // Only fetch videos belonging to the user's tenant
+    const videos = await Video.find({ tenantId: req.user.tenantId });
+    res.json(videos);
   });
 
   return router;
