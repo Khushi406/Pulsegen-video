@@ -4,7 +4,7 @@ import axios from '../utils/api'
 export default function LoginPage(){
   const [email,setEmail]=useState('')
   const [password,setPassword]=useState('')
-+  const [message,setMessage]=useState('')
+  const [message,setMessage]=useState('')
 
   async function handleSubmit(e){
     e.preventDefault()

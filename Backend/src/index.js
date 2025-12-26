@@ -18,9 +18,52 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 const io = new Server(server, { cors: { origin: '*' } });
+const jwt = require('jsonwebtoken');
+
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
+
+  // Expect clients to emit 'join' with either a tenantId string or a JWT token.
+  socket.on('join', (tokenOrTenant) => {
+    try {
+      let tenantId = null;
+      if (!tokenOrTenant) {
+        console.warn('Join called without payload from', socket.id);
+        return;
+      }
+
+      // If it's a JWT-like string (contains two dots), try to verify it
+      if (typeof tokenOrTenant === 'string' && tokenOrTenant.split('.').length === 3) {
+        const secret = process.env.JWT_SECRET || 'change_this_secret';
+        const payload = jwt.verify(tokenOrTenant, secret);
+        tenantId = payload.tenantId || payload.tenant || payload.org;
+      } else if (typeof tokenOrTenant === 'string') {
+        tenantId = tokenOrTenant;
+      } else if (tokenOrTenant && tokenOrTenant.tenantId) {
+        tenantId = tokenOrTenant.tenantId;
+      }
+
+      if (tenantId) {
+        socket.join(tenantId);
+        console.log(`Socket ${socket.id} joined tenant room: ${tenantId}`);
+        socket.emit('joined', { tenantId });
+      } else {
+        console.warn('Could not determine tenantId for socket', socket.id);
+      }
+    } catch (e) {
+      console.warn('Failed to join tenant room:', e.message);
+      socket.emit('error', { message: 'Failed to join tenant room' });
+    }
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('Socket disconnected:', socket.id, reason);
+  });
 });
+
+// Mount auth routes (signup/login)
+const authRouter = require('./routes/auth');
+app.use('/api/auth', authRouter);
 
 // Mount the upload router with injected `io` to avoid circular require
 app.use('/api/upload', uploadRouter(io));

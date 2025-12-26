@@ -19,6 +19,12 @@ export default function VideosPage(){
 
     const s = io(import.meta.env.VITE_API_BASE || 'http://localhost:4000')
     setSocket(s)
+    // send join with JWT so server can place socket in tenant room
+    s.on('connect', () => {
+      const token = localStorage.getItem('token')
+      if (token) s.emit('join', token)
+    })
+
     s.on('video:progress', msg => {
       setVideos(prev => prev.map(v => v._id===msg.id?{...v, progress: msg.percent}:v))
     })
@@ -38,7 +44,15 @@ export default function VideosPage(){
             <strong>{v.originalName || v.filename}</strong>
             <div>status: {v.status} {v.progress? ` - ${v.progress}%`: null}</div>
             <div>sensitivity: {v.sensitivity}</div>
-            <div><a href={`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/uploads/${v.filename}`} target="_blank">Play</a></div>
+            {v.status === 'processed' ? (
+              <video controls width="480" src={`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/uploads/${v.filename}`} />
+            ) : (
+              <div className="placeholder">Processing preview not available</div>
+            )}
+            <div className="progress-row">{v.progress ? (
+              <div className="progress"><div className="bar" style={{width: `${v.progress}%`}}>{v.progress}%</div></div>
+            ) : null}</div>
+            <div><a href={`${import.meta.env.VITE_API_BASE || 'http://localhost:4000'}/uploads/${v.filename}`} target="_blank" rel="noreferrer">Open file</a></div>
           </li>
         ))}
       </ul>
