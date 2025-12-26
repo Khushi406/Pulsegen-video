@@ -30,18 +30,26 @@ export default function UploadPage(){
   }
 
   return (
-    <div className="page">
-      <h2>Upload Video</h2>
-      <form onSubmit={handleUpload}>
-        <input type="file" accept="video/*" onChange={e=>setFile(e.target.files[0])} />
-        <button type="submit">Upload</button>
-      </form>
-      {uploadProgress > 0 && (
-        <div className="progress">
-          <div className="bar" style={{width: `${uploadProgress}%`}}>{uploadProgress}%</div>
-        </div>
-      )}
-      <p>{message}</p>
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="w-full max-w-lg bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-4">Upload Video</h2>
+        <form onSubmit={handleUpload} className="space-y-4">
+          <div>
+            <input className="w-full" type="file" accept="video/*" onChange={e=>setFile(e.target.files[0])} />
+          </div>
+          <div>
+            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md">Upload</button>
+          </div>
+        </form>
+
+        {uploadProgress > 0 && (
+          <div className="mt-4 w-full bg-gray-100 rounded overflow-hidden h-6">
+            <div className="h-6 bg-blue-500 text-white text-xs font-semibold flex items-center justify-center" style={{width: `${uploadProgress}%`}}>{uploadProgress}%</div>
+          </div>
+        )}
+
+        {message && <p className="mt-3 text-sm text-gray-700">{message}</p>}
+      </div>
     </div>
   )
 }

@@ -42,33 +42,45 @@ module.exports = function (io) {
           tenantId: req.user.tenantId
         });
 
-        // 1. Start real processing with FFmpeg
-        ffmpeg(record.path)
-          .on('progress', (progress) => {
-            // Emit granular real-time progress (e.g., 25%, 50%)
-            if (io) io.to(req.user.tenantId).emit('video:progress', { 
-              id: record._id, 
-              percent: Math.floor(progress.percent) 
-            });
-          })
-          .on('end', async () => {
-            // 2. Automated Sensitivity Check (Trigger after processing)
-            const analysis = await analyzeSensitivity(record.path);
-            record.sensitivity = analysis.result;
-            record.status = 'processed';
-            await record.save();
+        // 1. Probe duration (if available) then start processing and emit progress
+        ffmpeg.ffprobe(record.path, (probeErr, probeData) => {
+          const duration = probeData && probeData.format && Number(probeData.format.duration) || 0;
 
-            if (io) io.to(req.user.tenantId).emit('video:processed', { 
-              id: record._id, 
-              sensitivity: record.sensitivity 
+          const proc = ffmpeg(record.path)
+            .output(path.join(uploadDir, `processed-${record.filename}`))
+            .outputOptions(['-c copy'])
+            .on('progress', (progress) => {
+              // progress.timemark is like '00:00:05.12' - convert to seconds
+              let percent = 0;
+              if (progress.percent) percent = Math.floor(progress.percent);
+              else if (progress.timemark && duration) {
+                const parts = progress.timemark.split(':').map(Number);
+                const secs = parts[0]*3600 + parts[1]*60 + (parts[2] || 0);
+                percent = Math.floor((secs / duration) * 100);
+              }
+              if (io) io.to(req.user.tenantId).emit('video:progress', { id: record._id, percent });
+            })
+            .on('end', async () => {
+              // 2. Automated Sensitivity Check (Trigger after processing)
+              try {
+                const analysis = await analyzeSensitivity(record.path);
+                record.sensitivity = analysis.result || 'unknown';
+                record.status = 'processed';
+                await record.save();
+
+                if (io) io.to(req.user.tenantId).emit('video:processed', { id: record._id, sensitivity: record.sensitivity });
+              } catch (e) {
+                console.error('Analysis error', e);
+              }
+            })
+            .on('error', (err) => {
+              console.error('FFmpeg Error:', err);
+              record.status = 'failed';
+              record.save();
             });
-          })
-          .on('error', (err) => {
-            console.error('FFmpeg Error:', err);
-            record.status = 'failed';
-            record.save();
-          })
-          .save(path.join(uploadDir, `processed-${record.filename}`));
+
+          try { proc.run(); } catch (e) { console.error('Failed to start ffmpeg', e); }
+        });
 
         res.json({ message: 'Upload started', id: record._id });
       } catch (e) {

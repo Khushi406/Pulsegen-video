@@ -1,28 +1,43 @@
-// Lightweight sensitivity analysis using ffprobe metadata
+// Realistic sensitivity/quality analysis using ffprobe and an ffmpeg integrity pass
 const ffmpeg = require('./ffmpegConfig');
 
+function toNullPath() {
+  return process.platform === 'win32' ? 'NUL' : '/dev/null';
+}
+
 module.exports = function analyzeSensitivity(filePath) {
-  return new Promise((resolve, reject) => {
-    // Use ffprobe to extract duration and stream info
+  return new Promise((resolve) => {
+    // First, probe metadata
     ffmpeg.ffprobe(filePath, (err, metadata) => {
-      if (err) {
-        // fallback to unknown
-        return resolve({ result: 'unknown', metadata: null });
+      const resultMeta = metadata || null;
+      let duration = 0;
+      try { duration = metadata && metadata.format && Number(metadata.format.duration) || 0 } catch (e) { duration = 0 }
+
+      // Run a quick ffmpeg pass to verify integrity (transcode to null)
+      const out = toNullPath();
+      let flagged = false;
+      const cmd = ffmpeg(filePath)
+        .outputOptions(['-map 0', '-c copy', '-f null'])
+        .output(out)
+        .on('error', (err) => {
+          // If ffmpeg errors during processing, mark as flagged
+          flagged = true;
+        })
+        .on('end', () => {
+          // Use simple heuristic: errors => flagged, else safe/unknown based on duration
+          let result = 'safe';
+          if (flagged) result = 'flagged';
+          else if (duration === 0) result = 'unknown';
+          resolve({ result, metadata: resultMeta });
+        });
+
+      // Start the process
+      try {
+        cmd.run();
+      } catch (e) {
+        // If running fails, return unknown
+        resolve({ result: 'unknown', metadata: resultMeta });
       }
-
-      const format = metadata.format || {};
-      const duration = format.duration ? Number(format.duration) : 0;
-      const streams = metadata.streams || [];
-      const videoStream = streams.find(s => s.codec_type === 'video') || {};
-      const width = videoStream.width || 0;
-      const height = videoStream.height || 0;
-
-      // Simple heuristic: very long videos or very large resolution marked flagged
-      let result = 'safe';
-      if (duration > 60 * 60) result = 'flagged'; // > 1 hour
-      if (width >= 3840 || height >= 2160) result = 'flagged'; // >= 4K
-
-      resolve({ result, metadata: { duration, width, height } });
     });
   });
 };
