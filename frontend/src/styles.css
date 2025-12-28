@@ -1,9 +1,0 @@
-body{font-family:Arial,Helvetica,sans-serif;padding:16px}
-.page{max-width:800px;margin:0 auto}
-.app-header{margin-bottom:16px}
-nav a{margin-right:8px}
-
-.progress{background:#eee;border-radius:6px;overflow:hidden;margin:8px 0}
-.progress .bar{background:#2b82ff;color:#fff;padding:4px 8px;display:inline-block}
-.placeholder{background:#f7f7f7;border:1px dashed #ccc;padding:16px;margin:8px 0}
-.progress-row{margin-top:8px}

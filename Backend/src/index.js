@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
 
 const uploadRouter = require('./routes/upload');
 const videosRouter = require('./routes/videos');
+const streamRouter = require('./routes/stream');
 
 const app = express();
 const server = http.createServer(app);
@@ -70,6 +71,9 @@ app.use('/api/upload', uploadRouter(io));
 
 // Mount videos listing route
 app.use('/api/videos', videosRouter);
+
+// Mount streaming route
+app.use('/api/stream', streamRouter);
 
 const PORT = process.env.PORT || 4000;
 

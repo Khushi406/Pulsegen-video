@@ -2,12 +2,18 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const Video = require('../models/video');
+const { authenticate } = require('../middleware/auth');
 const router = express.Router();
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticate, async (req, res) => {
   try {
     const video = await Video.findById(req.params.id);
     if (!video) return res.status(404).send('Video not found');
+
+    // Tenant isolation check
+    if (video.tenantId !== req.user.tenantId) {
+      return res.status(403).send('Access denied');
+    }
 
     const videoPath = video.path;
     const videoSize = fs.statSync(videoPath).size;
