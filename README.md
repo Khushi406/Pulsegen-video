@@ -444,7 +444,7 @@ This project is licensed under the MIT License.
 
 For issues or questions:
 - Create an issue in the repository
-- Email: your.email@example.com
+- Email: Khushichaudhary01001@gmail.com
 
 ---
 
